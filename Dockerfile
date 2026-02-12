@@ -12,6 +12,7 @@ WORKDIR /app
 # Copy all project files
 COPY package*.json ./
 COPY tsconfig.json ./
+COPY prisma.config.ts ./
 COPY prisma/ ./prisma/
 COPY src/ ./src/
 COPY client/ ./client/

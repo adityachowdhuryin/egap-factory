@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>EGAP Command Plane</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    /* ── Reset & Base ──────────────────────────────────────────────── */
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: 'Inter', system-ui, -apple-system, sans-serif;
+      background: #1a1a1a;
+      color: #e0e0e0;
+      min-height: 100vh;
+    }
+
+    /* ── Header ────────────────────────────────────────────────────── */
+    header {
+      background: linear-gradient(135deg, #0d0d0d 0%, #1f1f1f 100%);
+      border-bottom: 1px solid #39ff1440;
+      padding: 1.5rem 2rem;
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      box-shadow: 0 4px 24px rgba(57, 255, 20, 0.06);
+    }
+
+    header .logo {
+      width: 40px;
+      height: 40px;
+      border-radius: 10px;
+      background: linear-gradient(135deg, #39ff14, #00cc66);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      font-size: 1.1rem;
+      color: #0d0d0d;
+      flex-shrink: 0;
+    }
+
+    header h1 {
+      font-size: 1.4rem;
+      font-weight: 700;
+      background: linear-gradient(90deg, #39ff14, #00ff88);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      letter-spacing: -0.02em;
+    }
+
+    header .subtitle {
+      font-size: 0.75rem;
+      color: #666;
+      margin-left: auto;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+    }
+
+    /* ── Main Container ────────────────────────────────────────────── */
+    main {
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 2rem;
+    }
+
+    .stats-bar {
+      display: flex;
+      gap: 1rem;
+      margin-bottom: 2rem;
+    }
+
+    .stat-chip {
+      background: #222;
+      border: 1px solid #333;
+      border-radius: 8px;
+      padding: 0.5rem 1rem;
+      font-size: 0.8rem;
+      color: #aaa;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .stat-chip .value {
+      color: #39ff14;
+      font-weight: 600;
+      font-size: 1rem;
+    }
+
+    /* ── Grid ──────────────────────────────────────────────────────── */
+    #agent-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+      gap: 1.25rem;
+    }
+
+    /* ── Agent Card ────────────────────────────────────────────────── */
+    .agent-card {
+      background: #2a2a2a;
+      border: 1px solid #383838;
+      border-radius: 14px;
+      padding: 1.5rem;
+      transition: transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .agent-card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 3px;
+      background: linear-gradient(90deg, #39ff14, #00cc66, transparent);
+      opacity: 0;
+      transition: opacity 0.25s ease;
+    }
+
+    .agent-card:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 12px 40px rgba(57, 255, 20, 0.1);
+      border-color: #39ff1450;
+    }
+
+    .agent-card:hover::before {
+      opacity: 1;
+    }
+
+    .agent-card .card-header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      margin-bottom: 0.75rem;
+    }
+
+    .agent-card .name {
+      font-size: 1.15rem;
+      font-weight: 700;
+      color: #fff;
+      letter-spacing: -0.01em;
+    }
+
+    .agent-card .role-badge {
+      background: rgba(57, 255, 20, 0.12);
+      color: #39ff14;
+      font-size: 0.7rem;
+      font-weight: 600;
+      padding: 0.25rem 0.65rem;
+      border-radius: 20px;
+      border: 1px solid rgba(57, 255, 20, 0.25);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      white-space: nowrap;
+    }
+
+    .agent-card .goal {
+      color: #999;
+      font-size: 0.85rem;
+      line-height: 1.5;
+      margin-bottom: 1rem;
+    }
+
+    .agent-card .section-label {
+      font-size: 0.65rem;
+      font-weight: 600;
+      color: #555;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      margin-bottom: 0.5rem;
+    }
+
+    .agent-card .tools-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.4rem;
+    }
+
+    .agent-card .tool-tag {
+      background: #1a1a1a;
+      color: #bbb;
+      font-size: 0.72rem;
+      font-weight: 500;
+      padding: 0.3rem 0.6rem;
+      border-radius: 6px;
+      border: 1px solid #333;
+      transition: border-color 0.2s, color 0.2s;
+    }
+
+    .agent-card:hover .tool-tag {
+      border-color: #39ff1430;
+      color: #ddd;
+    }
+
+    /* ── Loading & Error States ────────────────────────────────────── */
+    .loading-state, .error-state, .empty-state {
+      text-align: center;
+      padding: 4rem 2rem;
+      color: #666;
+    }
+
+    .loading-state .spinner {
+      width: 36px;
+      height: 36px;
+      border: 3px solid #333;
+      border-top-color: #39ff14;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      margin: 0 auto 1rem;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .error-state { color: #ff5555; }
+
+    .empty-state .icon {
+      font-size: 2.5rem;
+      margin-bottom: 0.75rem;
+    }
+
+    /* ── Pulse animation for live indicator ────────────────────────── */
+    .live-dot {
+      width: 8px;
+      height: 8px;
+      background: #39ff14;
+      border-radius: 50%;
+      display: inline-block;
+      animation: pulse 2s ease-in-out infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(57, 255, 20, 0.5); }
+      50% { opacity: 0.7; box-shadow: 0 0 0 6px rgba(57, 255, 20, 0); }
+    }
+
+    /* ── Responsive ────────────────────────────────────────────────── */
+    @media (max-width: 640px) {
+      header { padding: 1rem; }
+      main { padding: 1rem; }
+      #agent-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div class="logo">E</div>
+    <h1>EGAP Command Plane</h1>
+    <span class="subtitle"><span class="live-dot"></span>&nbsp; Live</span>
+  </header>
+
+  <main>
+    <div class="stats-bar" id="stats-bar"></div>
+    <div id="agent-grid">
+      <div class="loading-state">
+        <div class="spinner"></div>
+        <p>Loading agents…</p>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    async function loadAgents() {
+      const grid = document.getElementById('agent-grid');
+      const statsBar = document.getElementById('stats-bar');
+
+      try {
+        const res = await fetch('/api/agents');
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+        const agents = await res.json();
+
+        // ── Stats Bar ──────────────────────────────────────────────
+        const totalTools = new Set(agents.flatMap(a => a.tools.map(t => t.name))).size;
+        statsBar.innerHTML = `
+          <div class="stat-chip">
+            Agents <span class="value">${agents.length}</span>
+          </div>
+          <div class="stat-chip">
+            Unique Tools <span class="value">${totalTools}</span>
+          </div>
+        `;
+
+        // ── Empty State ────────────────────────────────────────────
+        if (agents.length === 0) {
+          grid.innerHTML = `
+            <div class="empty-state">
+              <div class="icon">🤖</div>
+              <p>No agents deployed yet.</p>
+              <p style="font-size:0.8rem; margin-top:0.5rem; color:#555;">
+                Use the Agent Wizard to create your first agent.
+              </p>
+            </div>
+          `;
+          return;
+        }
+
+        // ── Render Cards ───────────────────────────────────────────
+        grid.innerHTML = agents.map(agent => `
+          <div class="agent-card">
+            <div class="card-header">
+              <span class="name">${escapeHtml(agent.name)}</span>
+              <span class="role-badge">${escapeHtml(agent.role)}</span>
+            </div>
+            <p class="goal">${escapeHtml(agent.goal)}</p>
+            <div class="section-label">Tools</div>
+            <div class="tools-list">
+              ${agent.tools.length > 0
+                ? agent.tools.map(t => `<span class="tool-tag">${escapeHtml(t.name)}</span>`).join('')
+                : '<span class="tool-tag" style="color:#555;">None</span>'
+              }
+            </div>
+          </div>
+        `).join('');
+
+      } catch (err) {
+        grid.innerHTML = `
+          <div class="error-state">
+            <p>⚠️ Failed to load agents</p>
+            <p style="font-size:0.8rem; margin-top:0.5rem;">${escapeHtml(err.message)}</p>
+          </div>
+        `;
+      }
+    }
+
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    document.addEventListener('DOMContentLoaded', loadAgents);
+  </script>
+
+</body>
+</html>

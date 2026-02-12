@@ -23,7 +23,6 @@ model Agent {
   tools        Tool[]       @relation("AgentTools")
   deployments  Deployment[]
   tasks        Task[]
-  usageLogs    UsageLog[]
   createdAt    DateTime     @default(now())
   updatedAt    DateTime     @updatedAt
 }
@@ -56,31 +55,4 @@ model Task {
   agent        Agent    @relation(fields: [agentId], references: [id])
   agentId      String
   createdAt    DateTime @default(now())
-}
-
-// UsageLog model - FRS Cost Accounting: per-agent token tracking
-model UsageLog {
-  id         String   @id @default(uuid())
-  agent      Agent    @relation(fields: [agentId], references: [id])
-  agentId    String
-  action     String   // e.g., 'tool_call', 'llm_inference', 'resume'
-  tokens     Int      @default(0)
-  costUsd    Float    @default(0)
-  metadata   Json?
-  createdAt  DateTime @default(now())
-}
-
-// TraceSpan model - FRS Trace Map: distributed tracing across services
-model TraceSpan {
-  id          String   @id @default(uuid())
-  traceId     String   // groups all spans for one request flow
-  parentId    String?  // parent span id (null for root spans)
-  service     String   // e.g., 'ingress', 'orchestrator', 'acc'
-  operation   String   // e.g., 'webhook_receive', 'task_create', 'approve'
-  status      String   @default("OK") // OK, ERROR
-  durationMs  Int      @default(0)
-  metadata    Json?
-  startedAt   DateTime @default(now())
-
-  @@index([traceId])
 }
