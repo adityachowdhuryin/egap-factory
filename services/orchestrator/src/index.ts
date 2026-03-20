@@ -375,8 +375,9 @@ app.post<{ Body: AgentPayload }>('/api/agents', async (request, reply) => {
 
             console.log(`⏳ Submitting ADK deployment script. This will take 3-5 minutes...`);
 
-            // Execute python script
-            const { stdout, stderr } = await execPromise(`python3 ${scriptPath} '${payload.replace(/'/g, "'\\''")}'`);
+            // Execute python script using venv
+            const pythonExecutable = path.join(__dirname, '..', 'venv', 'bin', 'python3');
+            const { stdout, stderr } = await execPromise(`"${pythonExecutable}" "${scriptPath}" '${payload.replace(/'/g, "'\\''")}'`);
 
             if (stderr && stderr.includes('Error')) {
                 console.error("ADK Deploy Error:", stderr);
@@ -473,8 +474,9 @@ app.post<{ Params: { id: string } }>('/api/agents/:id/redeploy', async (request,
 
         let resourceName = '';
         try {
+            const pythonExecutable = path.join(__dirname, '..', 'venv', 'bin', 'python3');
             const { stdout, stderr } = await execPromise(
-                `python3 ${scriptPath} '${payload.replace(/'/g, "'\\''")}'`,
+                `"${pythonExecutable}" "${scriptPath}" '${payload.replace(/'/g, "'\\''")}'`,
                 { timeout: 600_000 } // 10 minutes max
             );
 
@@ -766,6 +768,7 @@ app.post<{ Body: ChatPayload }>('/api/chat', async (request, reply) => {
                     classMethod: 'stream_query',
                     input: {
                         fields: {
+                            session_id: { stringValue: '' }, // Empty = ADK auto-creates a new session (non-empty causes SessionNotFoundError)
                             user_id: { stringValue: 'orchestrator-user' },
                             message: { stringValue: message }
                         }
@@ -775,7 +778,7 @@ app.post<{ Body: ChatPayload }>('/api/chat', async (request, reply) => {
                 let replyText = '';
                 for await (const chunk of responseStream as any) {
                     // chunk.data is a Buffer directly (not chunk.data.data)
-                    if (chunk?.data && Buffer.isBuffer(chunk.data)) {
+                    if (chunk?.data && Buffer.isBuffer(chunk.data) && chunk.data.length > 0) {
                         try {
                             const decoded = chunk.data.toString('utf-8');
                             const eventJson = JSON.parse(decoded);
@@ -795,8 +798,30 @@ app.post<{ Body: ChatPayload }>('/api/chat', async (request, reply) => {
                     }
                 }
 
+                // If Vertex AI returned an empty stream, fall back to inline Gemini processing
                 if (!replyText) {
-                    replyText = 'No reachable text in response stream.';
+                    console.log(`⚠️ Vertex AI stream returned empty for ${agentPath}. Falling back to inline Gemini...`);
+
+                    const chatData = {
+                        type: 'CHAT',
+                        agentId,
+                        message,
+                        traceId,
+                        dbMessageId: userMsg.id,
+                    };
+
+                    processChat(chatData).catch(err => {
+                        console.error('❌ Inline fallback also failed:', err);
+                        prisma.message.create({
+                            data: {
+                                agentId,
+                                role: 'assistant',
+                                content: '[System] ⚠️ Agent is temporarily unavailable. Please try again later.',
+                            },
+                        }).catch(console.error);
+                    });
+
+                    return { status: 'sent', messageId: traceId, userMessage: userMsg, routedTo: 'inline-fallback' };
                 }
 
                 // Clean up stringified double quotes if they exist
@@ -880,11 +905,55 @@ app.post<{ Body: ChatPayload }>('/api/chat', async (request, reply) => {
                     },
                 });
 
+                // ── USAGE TELEMETRY: Fallback Local Estimation ──
+                // Estimate tokens: roughly 4 chars per token.
+                const estimatedTokens = Math.ceil((message.length + replyText.length) / 4) || 0;
+                // Gemini 2.5 Flash pricing is $0.075/1M input and $0.30/1M output. 
+                // We use a blended average of $0.15 per 1M tokens for local UI estimation.
+                const estimatedCost = estimatedTokens * 0.00000015;
+
+                try {
+                    console.log(`💰 Locally estimating tokens for ${agentPath}: ${estimatedTokens}. Writing to UsageLog.`);
+                    await prisma.usageLog.create({
+                        data: {
+                            agentId,
+                            tokens: estimatedTokens,
+                            costUsd: estimatedCost,
+                            action: 'chat_completion'
+                        }
+                    });
+                } catch (e) {
+                    console.error('⚠️ Failed to save token UsageLog', e);
+                }
+
                 return { status: 'sent', messageId: traceId, userMessage: userMsg, routedTo: agentPath };
 
             } catch (cxErr: any) {
                 console.error(`❌ Failed to execute ADK Reasoning Engine ${agentPath}:`, cxErr.message || cxErr);
-                return reply.status(500).send({ error: 'ADK Agent execution failed' });
+                console.log(`⚙️ Falling back to inline processing for ${agentId}...`);
+
+                const chatData = {
+                    type: 'CHAT',
+                    agentId,
+                    message,
+                    traceId,
+                    dbMessageId: userMsg.id,
+                };
+
+                processChat(chatData).catch(err => {
+                    console.error('❌ Inline fallback also failed:', err);
+                    
+                    // As a final resort, save a system error message so the UI doesn't hang indefinitely 
+                    prisma.message.create({
+                        data: {
+                            agentId,
+                            role: 'assistant',
+                            content: '[System] ⚠️ Agent is temporarily unavailable (all execution methods failed). Please try again later.'
+                        }
+                    }).catch(console.error);
+                });
+
+                return { status: 'sent', messageId: traceId, userMessage: userMsg, routedTo: 'inline-fallback' };
             }
         } else {
             // FALLBACK: No deployment URL found.

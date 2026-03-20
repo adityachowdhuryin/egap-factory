@@ -2,3 +2,9 @@ node_modules
 .env
 /generated/prisma
 *.log
+venv/
+__pycache__/
+.DS_Store
+test_metrics_output.txt
+logs.txt
+logs2.txt

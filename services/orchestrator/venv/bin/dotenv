@@ -1,5 +1,5 @@
 #!/bin/sh
-'''exec' "/Users/adityachowdhury/Desktop/GLS Project/egap-factory/services/orchestrator/venv/bin/python3" "$0" "$@"
+'''exec' "/Users/adityachowdhury/Desktop/GLS Project/egap-factory/services/orchestrator/venv/bin/python3.11" "$0" "$@"
 ' '''
 # -*- coding: utf-8 -*-
 import re

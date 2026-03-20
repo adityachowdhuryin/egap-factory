@@ -241,8 +241,14 @@ def _create_egap_agent(
 
     os.environ["AGENT_ID"] = agent_id
 
+    # ADK Agent names must be valid Python identifiers
+    import re
+    safe_name = re.sub(r'[^a-zA-Z0-9_]', '_', name.lower())
+    if not safe_name[0].isalpha():
+        safe_name = 'agent_' + safe_name
+
     agent = Agent(
-        name=name.lower().replace(" ", "_"),
+        name=safe_name,
         model=model_name,
         instruction=system_prompt,
         tools=agent_tools,
@@ -319,8 +325,9 @@ def main():
     # 4. Wrap the Agent in AdkApp (required by ReasoningEngine / Agent Engine metrics)
     app = AdkApp(
         agent=agent,
+        enable_tracing=True,
         env_vars={
-            "GOOGLE_CLOUD_AGENT_ENGINE_ENABLE_TELEMETRY": "true"
+            "GOOGLE_CLOUD_AGENT_ENGINE_ENABLE_TELEMETRY": "true",
         },
         session_service_builder=InMemorySessionService,
         artifact_service_builder=InMemoryArtifactService,
@@ -343,9 +350,10 @@ def main():
                 "requests>=2.31.0",
                 "opentelemetry-exporter-otlp-proto-http",
                 "opentelemetry-exporter-gcp-logging",
+                "opentelemetry-sdk",
             ],
             env_vars={
-                "GOOGLE_CLOUD_AGENT_ENGINE_ENABLE_TELEMETRY": "true"
+                "GOOGLE_CLOUD_AGENT_ENGINE_ENABLE_TELEMETRY": "true",
             },
             display_name=name,
             description=f"EGAP Agent: {role} — {goal}",

@@ -140,8 +140,12 @@ function App() {
         if (activeTab === 'observe') { fetchStats(); fetchReconciliation(); fetchErrorLogs(); }
         if (activeTab === 'analytics') fetchCostTimeseries();
 
+        // Only poll chat if we're not streaming a response
         const interval = setInterval(() => {
-            if (activeTab === 'test' && selectedAgentId) fetchMessages();
+            if (activeTab === 'test' && selectedAgentId && !Object.values(chatHistory).some(m => m.id.startsWith('temp-') || streamingContent)) {
+                fetchMessages();
+            }
+
             if (activeTab === 'observe') { fetchStats(); fetchReconciliation(); fetchErrorLogs(); }
             if (activeTab === 'govern') { fetchTasks(); fetchAllTasks(); fetchAuditLogs(); }
             if (activeTab === 'analytics') fetchCostTimeseries();
@@ -179,9 +183,10 @@ function App() {
         };
     }, [selectedAgentId, activeTab]);
 
+    // Auto-scroll to bottom only when chat length changes or streaming updates
     useEffect(() => {
         chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-    }, [chatHistory]);
+    }, [chatHistory.length, streamingContent]);
 
     // ── API Calls ────────────────────────────────────────────────────
     const fetchTools = async () => {
@@ -372,6 +377,13 @@ function App() {
             });
             if (!res.ok) throw new Error('Failed');
             setSuccessMessage(`🎉 Agent ${editingAgentId ? 'updated' : 'deployed'} successfully!`);
+            
+            // If we just updated an agent, trigger a background redeployment to Vertex AI
+            if (editingAgentId && url.includes(editingAgentId)) {
+                fetch(`/api/agents/${editingAgentId}/redeploy`, { method: 'POST' })
+                    .catch(e => console.error("Background redeploy failed:", e));
+            }
+
             setFormData({ name: '', role: '', goal: '', systemPrompt: '', tools: [], budgetUsd: 5.0 });
             setEditingAgentId(null);
             fetchAgents();
@@ -496,7 +508,8 @@ function App() {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ agentId: selectedAgentId, message: msg }),
             });
-            // Don't fetch immediately, let the webhook/worker do its job
+            // Fetch immediately after the agent responds (avoids waiting for next 3s poll)
+            await fetchMessages();
         } catch (err) { setErrorMessage('Failed to send message.'); }
     };
 
@@ -669,7 +682,7 @@ function App() {
                         <div className="lg:col-span-1 space-y-4">
                             <h2 className="text-xl font-semibold mb-4 text-gray-300">Registered Tools</h2>
                             <div className="space-y-3 max-h-[600px] overflow-y-auto pr-2">
-                                {tools.filter(tool => tool.name && !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(tool.name)).map(tool => (
+                                {tools.map(tool => (
                                     <div key={tool.id} className="p-4 bg-gray-800/80 border border-gray-700 rounded-xl">
                                         <p className="font-bold text-lg text-white">{tool.name}</p>
                                         <p className="text-sm text-gray-400 mt-1">{tool.description}</p>
@@ -777,7 +790,7 @@ function App() {
                             <div>
                                 <label className="block text-sm font-medium text-gray-300 mb-3">Tools</label>
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-40 overflow-y-auto p-2 border border-gray-700 rounded-xl bg-gray-900/30">
-                                    {tools.filter(tool => tool.name && !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(tool.name)).map((tool) => (
+                                    {tools.map((tool) => (
                                         <label key={tool.id} className={`flex items-center gap-3 p-3 rounded-lg cursor-pointer border ${formData.tools.includes(tool.name) ? 'bg-purple-900/40 border-purple-500' : 'border-transparent hover:bg-gray-800'}`}>
                                             <input type="checkbox" checked={formData.tools.includes(tool.name)} onChange={() => handleToolToggle(tool.name)} className="accent-purple-500" />
                                             <span className="text-sm font-medium">{tool.name}</span>

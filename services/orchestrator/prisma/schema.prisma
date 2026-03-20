@@ -15,22 +15,23 @@ datasource db {
 
 // Agent model - represents an AI agent configuration
 model Agent {
-  id             String         @id @default(uuid())
-  name           String         @unique
-  role           String         // e.g., 'HR Assistant'
-  goal           String         // e.g., 'Answer queries about benefits'
-  systemPrompt   String         @db.Text
-  budgetUsd      Float          @default(5.0)  // Per-agent budget limit in USD
-  isActive       Boolean        @default(true) // Auto-shutdown flag
-  currentVersion Int            @default(1)    // Current version number
-  tools          Tool[]         @relation("AgentTools")
-  deployments    Deployment[]
-  tasks          Task[]
-  usageLogs      UsageLog[]
-  messages       Message[]
-  versions       AgentVersion[]
-  createdAt      DateTime       @default(now())
-  updatedAt      DateTime       @updatedAt
+  id              String         @id @default(uuid())
+  name            String         @unique
+  role            String         // e.g., 'HR Assistant'
+  goal            String         // e.g., 'Answer queries about benefits'
+  systemPrompt    String         @db.Text
+  budgetUsd       Float          @default(5.0)  // Per-agent budget limit in USD
+  isActive        Boolean        @default(true) // Auto-shutdown flag
+  currentVersion  Int            @default(1)    // Current version number
+  adkResourceName String?        // Vertex AI Reasoning Engine resource name
+  tools           Tool[]         @relation("AgentTools")
+  deployments     Deployment[]
+  tasks           Task[]
+  usageLogs       UsageLog[]
+  messages        Message[]
+  versions        AgentVersion[]
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
 }
 
 // AgentVersion model - stores historical snapshots of agent configurations
@@ -56,6 +57,8 @@ model Tool {
   name          String  @unique // e.g., 'vertex_search'
   description   String
   configuration Json?   // To store API keys or settings
+  mcpServerUrl  String? // MCP server URL for tool execution
+  actionType    String  @default("READ") // READ or WRITE (WRITE = HITL required)
   agents        Agent[] @relation("AgentTools")
 }
 
@@ -71,15 +74,18 @@ model Deployment {
 
 // Task model - represents a pending action for HITL governance
 model Task {
-  id           String   @id @default(uuid())
+  id           String    @id @default(uuid())
   description  String
-  status       String   @default("PENDING") // PENDING, APPROVED, REJECTED
+  status       String    @default("PENDING") // PENDING, APPROVED, REJECTED, COMPLETED
   inputPayload Json?
-  agent        Agent    @relation(fields: [agentId], references: [id])
+  comments     Json?     // Array of comment objects
+  actionedBy   String?   // Who approved/rejected
+  actionedAt   DateTime? // When approved/rejected
+  agent        Agent     @relation(fields: [agentId], references: [id])
   agentId      String
-  traceId      String?  // For Reconciliation: Link to Ingress Trace
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  traceId      String?   // For Reconciliation: Link to Ingress Trace
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
 }
 
 // UsageLog model - FRS Cost Accounting: per-agent token tracking
@@ -127,4 +133,26 @@ model GlobalSettings {
   key       String   @unique // e.g., 'emergency_stop'
   value     Json     // e.g., { active: true, triggeredBy: 'admin', at: '...' }
   updatedAt DateTime @updatedAt
+}
+
+// AuditLog model - tracks governance actions
+model AuditLog {
+  id          String   @id @default(uuid())
+  action      String   // APPROVE, REJECT, EDIT, COMMENT
+  entityType  String   // TASK, AGENT, etc.
+  entityId    String
+  performedBy String   @default("admin")
+  details     Json?
+  createdAt   DateTime @default(now())
+}
+
+// ErrorLog model - tracks errors across services
+model ErrorLog {
+  id        String   @id @default(uuid())
+  service   String   // e.g., 'orchestrator', 'ingress'
+  agentId   String?
+  message   String
+  stack     String?  @db.Text
+  metadata  Json?
+  createdAt DateTime @default(now())
 }
