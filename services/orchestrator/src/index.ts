@@ -969,6 +969,14 @@ app.post<{ Body: ChatPayload }>('/api/chat', async (request, reply) => {
 
             processChat(chatData).catch(err => {
                 console.error('❌ Inline chat processing error:', err);
+                // Save fallback message so UI doesn't hang
+                prisma.message.create({
+                    data: {
+                        agentId,
+                        role: 'assistant',
+                        content: '[System] ⚠️ Agent is temporarily unavailable. Please try again later.',
+                    },
+                }).catch(console.error);
             });
 
             return { status: 'sent', messageId: traceId, userMessage: userMsg, routedTo: 'inline' };
@@ -1889,6 +1897,15 @@ async function processChat(data: { type: string; agentId: string; message: strin
     } catch (err: any) {
         opStatus = 'ERROR';
         console.error('❌ processChat error:', err);
+
+        // CRITICAL: Save a fallback error message so the UI never hangs on "Agent Generating..."
+        await prisma.message.create({
+            data: {
+                agentId: data.agentId,
+                role: 'assistant',
+                content: '[System] ⚠️ Agent encountered an error while processing your message. Please try again.',
+            },
+        }).catch((e2: any) => console.error('Failed to save fallback error message:', e2));
 
         // Record error for Error Log Feed
         await prisma.errorLog.create({
